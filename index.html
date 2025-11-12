@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 星际知识点大追捕</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            background-color: #000;
+            color: #fff;
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #loading-error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #f00;
+            font-size: 24px;
+            text-align: center;
+            display: none;
+        }
+        #game-ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .ui-element {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            pointer-events: auto;
+        }
+        #start-button {
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 36px;
+            padding: 20px 60px;
+            cursor: pointer;
+            background: linear-gradient(45deg, #4CAF50, #2196F3);
+            border: none;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        #start-button:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.8);
+        }
+        #timer {
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffeb3b;
+        }
+        #score-player1, #score-player2 {
+            top: 20px;
+            color: #fff;
+        }
+        #score-player1 {
+            left: 20px;
+        }
+        #score-player2 {
+            right: 20px;
+            color: #ff5722;
+        }
+        #accuracy {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #4CAF50;
+        }
+        #end-panel {
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+        }
+        #end-panel h2 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: #4CAF50;
+        }
+        #end-panel p {
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+        #restart-button {
+            font-size: 28px;
+            padding: 15px 40px;
+            margin-top: 20px;
+            cursor: pointer;
+            background: linear-gradient(45deg, #FF5722, #FF9800);
+            border: none;
+            color: white;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        #restart-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(255, 87, 34, 0.8);
+        }
+        #mode-toggle {
+            top: 20px;
+            right: 20px;
+            font-size: 20px;
+            padding: 10px 20px;
+            cursor: pointer;
+            background: rgba(0, 150, 136, 0.8);
+            border: none;
+            color: white;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            display: none;
+        }
+        #mode-toggle:hover {
+            background: rgba(0, 150, 136, 1);
+        }
+        #sound-toggle {
+            bottom: 20px;
+            right: 20px;
+            font-size: 20px;
+            padding: 10px 20px;
+            cursor: pointer;
+            background: rgba(156, 39, 176, 0.8);
+            border: none;
+            color: white;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        #sound-toggle:hover {
+            background: rgba(156, 39, 176, 1);
+        }
+        .score-popup {
+            position: absolute;
+            font-size: 24px;
+            font-weight: bold;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+        }
+        @keyframes floatUp {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="loading-error">Three.js 加载失败，请刷新重试</div>
+    <div id="game-ui">
+        <button id="start-button" class="ui-element">开始游戏</button>
+        <div id="timer" class="ui-element">剩余时间: 60s</div>
+        <div id="score-player1" class="ui-element">得分: 0</div>
+        <div id="score-player2" class="ui-element">得分: 0</div>
+        <div id="accuracy" class="ui-element">正确率: 100%</div>
+        <div id="end-panel" class="ui-element">
+            <h2>游戏结束</h2>
+            <p id="final-score">最终得分: 0</p>
+            <p id="final-accuracy">正确率: 100%</p>
+            <button id="restart-button">重新开始</button>
+        </div>
+        <button id="mode-toggle" class="ui-element">切换到双人模式</button>
+        <button id="sound-toggle" class="ui-element">静音</button>
+    </div>
+
+    <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
+    <script>
+        // Three.js 加载失败容错
+        if (typeof THREE === 'undefined') {
+            document.getElementById('loading-error').style.display = 'block';
+        }
+
+        // 游戏配置参数 - 【参数调整处】
+        const GAME_CONFIG = {
+            gameTime: 60, // 游戏时间（秒）
+            planetSpeed: 0.01, // 星球移动速度
+            planetSpawnRate: 1, // 星球生成频率（秒/个）
+            accelerationDuration: 2000, // 加速持续时间（毫秒）
+            accelerationCooldown: 1000, // 加速冷却时间（毫秒）
+            collectionDistance: 0.8, // 收集距离
+            pointForCorrect: 10, // 正确知识点分数
+            pointForWrong: -5, // 错误知识点分数
+            maxPlanets: 20, // 最大星球数量
+            starCount: 500, // 星星数量
+            shipSpeed: 0.02, // 飞船基础速度
+            shipAcceleration: 0.04, // 飞船加速速度
+            isSinglePlayer: true, // 默认单人模式
+            soundEnabled: true // 默认开启音效
+        };
+
+        // 知识点贴图路径 - 【知识点替换处】
+        const KNOWLEDGE_PLANET_TEXTURES = [
+            // 这里可以替换为实际的知识点图片路径
+            // 'math_formula1.png', 'math_formula2.png', etc.
+            // 目前使用颜色代替
+            '#4CAF50', '#45a049', '#388e3c', '#2e7d32', '#27662c'
+        ];
+
+        const DISTURBANCE_PLANET_TEXTURE = '#f44336'; // 干扰星球颜色
+
+        // 游戏状态
+        let gameState = {
+            isRunning: false,
+            remainingTime: GAME_CONFIG.gameTime,
+            scorePlayer1: 0,
+            scorePlayer2: 0,
+            correctCount: 0,
+            wrongCount: 0,
+            lastSpawnTime: 0,
+            lastAccelerationPlayer1: 0,
+            lastAccelerationPlayer2: 0,
+            hasShieldPlayer1: false,
+            hasShieldPlayer2: false,
+            shieldEndTimePlayer1: 0,
+            shieldEndTimePlayer2: 0,
+            spawnedPlanets: 0
+        };
+
+        // 场景初始化
+        let scene, camera, renderer, clock;
+        let stars = [];
+        let planets = [];
+        let ships = [];
+        let shipVelocities = [];
+        let shipAccelerating = [false, false];
+        let shipShields = [null, null];
+        let mousePosition = { x: 0, y: 0 };
+        let keys = {};
+        let soundEffects = {};
+
+        function init() {
+            // 创建场景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000000);
+
+            // 创建相机
+            const aspectRatio = window.innerWidth / window.innerHeight;
+            camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
+            camera.position.z = 5;
+
+            // 创建渲染器
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+            // 创建时钟
+            clock = new THREE.Clock();
+
+            // 初始化星星
+            createStars();
+
+            // 初始化飞船
+            createShips();
+
+            // 创建音效
+            createSoundEffects();
+
+            // 事件监听
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mousedown', onMouseDown);
+            window.addEventListener('keydown', onKeyDown);
+            window.addEventListener('keyup', onKeyUp);
+
+            // UI 事件
+            document.getElementById('start-button').addEventListener('click', startGame);
+            document.getElementById('restart-button').addEventListener('click', restartGame);
+            document.getElementById('mode-toggle').addEventListener('click', toggleMode);
+            document.getElementById('sound-toggle').addEventListener('click', toggleSound);
+
+            // 开始动画循环
+            animate();
+        }
+
+        // 创建星星粒子系统
+        function createStars() {
+            const starGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(GAME_CONFIG.starCount * 3);
+            const colors = new Float32Array(GAME_CONFIG.starCount * 3);
+            const sizes = new Float32Array(GAME_CONFIG.starCount);
+
+            for (let i = 0; i < GAME_CONFIG.starCount; i++) {
+                const i3 = i * 3;
+                
+                // 随机位置
+                positions[i3] = (Math.random() - 0.5) * 100;
+                positions[i3 + 1] = (Math.random() - 0.5) * 100;
+                positions[i3 + 2] = (Math.random() - 0.5) * 100;
+                
+                // 随机颜色（白色为主，带一些蓝色和黄色点缀）
+                const brightness = Math.random() * 0.8 + 0.2;
+                const colorType = Math.random();
+                
+                if (colorType < 0.8) { // 80% 白色
+                    colors[i3] = brightness;
+                    colors[i3 + 1] = brightness;
+                    colors[i3 + 2] = brightness;
+                } else if (colorType < 0.9) { // 10% 蓝色
+                    colors[i3] = brightness * 0.5;
+                    colors[i3 + 1] = brightness * 0.5;
+                    colors[i3 + 2] = brightness;
+                } else { // 10% 黄色
+                    colors[i3] = brightness;
+                    colors[i3 + 1] = brightness;
+                    colors[i3 + 2] = brightness * 0.5;
+                }
+                
+                // 随机大小
+                sizes[i] = Math.random() * 2 + 1;
+            }
+
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            starGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            starGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            const starMaterial = new THREE.PointsMaterial({
+                size: 1,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            const starField = new THREE.Points(starGeometry, starMaterial);
+            scene.add(starField);
+            stars.push(starField);
+        }
+
+        // 创建飞船
+        function createShips() {
+            // 创建更复杂的飞船模型函数
+            function createEnhancedShip(color, emissive) {
+                const shipGroup = new THREE.Group();
+                
+                // 主体 - 圆锥体
+                const mainGeometry = new THREE.ConeGeometry(0.25, 0.5, 8);
+                const mainMaterial = new THREE.MeshPhongMaterial({
+                    color: color,
+                    emissive: emissive,
+                    specular: 0xffffff,
+                    shininess: 100,
+                    metalness: 0.9,
+                    roughness: 0.1
+                });
+                const mainBody = new THREE.Mesh(mainGeometry, mainMaterial);
+                mainBody.position.y = 0.25;
+                shipGroup.add(mainBody);
+                
+                // 驾驶舱 - 半球体
+                const cockpitGeometry = new THREE.SphereGeometry(0.15, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+                const cockpitMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x87CEEB,
+                    emissive: 0x000020,
+                    specular: 0xffffff,
+                    shininess: 150,
+                    metalness: 0.3,
+                    roughness: 0.2,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
+                cockpit.position.y = 0.6;
+                cockpit.rotation.x = Math.PI;
+                shipGroup.add(cockpit);
+                
+                // 机翼 - 两个三角形
+                const wingGeometry = new THREE.ConeGeometry(0.05, 0.4, 3);
+                const wingMaterial = new THREE.MeshPhongMaterial({
+                    color: color,
+                    emissive: emissive,
+                    specular: 0xffffff,
+                    shininess: 100,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                
+                const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
+                leftWing.position.set(-0.3, 0.3, 0);
+                leftWing.rotation.z = Math.PI / 2;
+                shipGroup.add(leftWing);
+                
+                const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
+                rightWing.position.set(0.3, 0.3, 0);
+                rightWing.rotation.z = -Math.PI / 2;
+                shipGroup.add(rightWing);
+                
+                // 尾焰基座 - 圆柱体
+                const thrusterBaseGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.2, 8);
+                const thrusterBaseMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x333333,
+                    emissive: 0x111111,
+                    specular: 0x444444,
+                    shininess: 50,
+                    metalness: 0.7,
+                    roughness: 0.3
+                });
+                const thrusterBase = new THREE.Mesh(thrusterBaseGeometry, thrusterBaseMaterial);
+                thrusterBase.position.y = 0;
+                shipGroup.add(thrusterBase);
+                
+                // 添加发光边缘效果
+                const edgeGeometry = new THREE.RingGeometry(0.25, 0.27, 16);
+                const edgeMaterial = new THREE.MeshBasicMaterial({
+                    color: color,
+                    emissive: color,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
+                edge.position.y = 0.5;
+                edge.rotation.x = Math.PI / 2;
+                shipGroup.add(edge);
+                
+                return shipGroup;
+            }
+
+            // 飞船1（蓝色）
+            const ship1 = createEnhancedShip(0x2196F3, 0x000040);
+            ship1.position.set(0, 0, 0);
+            ship1.rotation.x = Math.PI / 2;
+            scene.add(ship1);
+            ships.push(ship1);
+            shipVelocities.push({ x: 0, y: 0 });
+
+            // 飞船2（红色）- 在双人模式下显示
+            const ship2 = createEnhancedShip(0xFF5722, 0x400000);
+            ship2.position.set(2, 0, 0);
+            ship2.rotation.x = Math.PI / 2;
+            ship2.visible = false;
+            scene.add(ship2);
+            ships.push(ship2);
+            shipVelocities.push({ x: 0, y: 0 });
+
+            // 创建护盾
+            const shieldGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+            const shieldMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff0000,
+                transparent: true,
+                opacity: 0.5
+            });
+
+            const shield1 = new THREE.Mesh(shieldGeometry, shieldMaterial);
+            shield1.visible = false;
+            scene.add(shield1);
+            shipShields.push(shield1);
+
+            const shield2 = new THREE.Mesh(shieldGeometry, shieldMaterial);
+            shield2.visible = false;
+            scene.add(shield2);
+            shipShields.push(shield2);
+
+            // 添加光源
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(1, 1, 1).normalize();
+            scene.add(directionalLight);
+
+            // 为每艘飞船创建尾焰
+            createThrusters();
+        }
+
+        // 创建飞船尾焰
+        function createThrusters() {
+            // 尾焰粒子材质
+            const thrusterMaterialPlayer1 = new THREE.PointsMaterial({
+                color: 0x00aaff,
+                size: 0.1,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            const thrusterMaterialPlayer2 = new THREE.PointsMaterial({
+                color: 0xff5500,
+                size: 0.1,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            // 飞船1尾焰
+            const thruster1Geometry = new THREE.BufferGeometry();
+            const thruster1Positions = new Float32Array(50 * 3);
+            for (let i = 0; i < 50; i++) {
+                const i3 = i * 3;
+                thruster1Positions[i3] = (Math.random() - 0.5) * 0.2;
+                thruster1Positions[i3 + 1] = (Math.random() - 0.5) * 0.2;
+                thruster1Positions[i3 + 2] = -0.3 - Math.random() * 0.5;
+            }
+            thruster1Geometry.setAttribute('position', new THREE.BufferAttribute(thruster1Positions, 3));
+            const thruster1 = new THREE.Points(thruster1Geometry, thrusterMaterialPlayer1);
+            ships[0].add(thruster1);
+
+            // 飞船2尾焰
+            const thruster2Geometry = new THREE.BufferGeometry();
+            const thruster2Positions = new Float32Array(50 * 3);
+            for (let i = 0; i < 50; i++) {
+                const i3 = i * 3;
+                thruster2Positions[i3] = (Math.random() - 0.5) * 0.2;
+                thruster2Positions[i3 + 1] = (Math.random() - 0.5) * 0.2;
+                thruster2Positions[i3 + 2] = -0.3 - Math.random() * 0.5;
+            }
+            thruster2Geometry.setAttribute('position', new THREE.BufferAttribute(thruster2Positions, 3));
+            const thruster2 = new THREE.Points(thruster2Geometry, thrusterMaterialPlayer2);
+            ships[1].add(thruster2);
+        }
+
+        // 创建音效
+        function createSoundEffects() {
+            // 使用 Web Audio API 创建简单音效
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) {
+                const audioCtx = new AudioContext();
+                
+                // 收集正确音效
+                soundEffects.collect = () => {
+                    if (!GAME_CONFIG.soundEnabled) return;
+                    const oscillator = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.3);
+                    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                    oscillator.start();
+                    oscillator.stop(audioCtx.currentTime + 0.3);
+                };
+
+                // 碰撞错误音效
+                soundEffects.collide = () => {
+                    if (!GAME_CONFIG.soundEnabled) return;
+                    const oscillator = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    oscillator.type = 'sawtooth';
+                    oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.5);
+                    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+                    oscillator.start();
+                    oscillator.stop(audioCtx.currentTime + 0.5);
+                };
+
+                // 加速音效
+                soundEffects.accelerate = () => {
+                    if (!GAME_CONFIG.soundEnabled) return;
+                    const oscillator = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(100, audioCtx.currentTime);
+                    oscillator.frequency.setValueAtTime(300, audioCtx.currentTime + 0.2);
+                    gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime + 0.1);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                    oscillator.start();
+                    oscillator.stop(audioCtx.currentTime + 0.3);
+                };
+            }
+        }
+
+        // 生成星球
+        function spawnPlanet() {
+            if (planets.length >= GAME_CONFIG.maxPlanets) return;
+            
+            const currentTime = Date.now();
+            if (currentTime - gameState.lastSpawnTime < GAME_CONFIG.planetSpawnRate * 1000) return;
+            
+            gameState.lastSpawnTime = currentTime;
+            gameState.spawnedPlanets++;
+            
+            // 随机决定是知识点星球还是干扰星球 (70% 正确，30% 错误)
+            const isCorrect = Math.random() < 0.7;
+            
+            // 随机大小
+            const radius = Math.random() * 0.3 + 0.3;
+            
+            // 创建星球几何体
+            const geometry = new THREE.SphereGeometry(radius, 32, 32);
+            
+            // 创建材质
+            let material;
+            if (isCorrect) {
+                // 知识点星球 - 使用颜色或贴图
+                const colorIndex = Math.floor(Math.random() * KNOWLEDGE_PLANET_TEXTURES.length);
+                const color = KNOWLEDGE_PLANET_TEXTURES[colorIndex];
+                material = new THREE.MeshPhongMaterial({
+                    color: color,
+                    emissive: isCorrect ? 0x002000 : 0x200000,
+                    specular: 0xffffff,
+                    shininess: 100
+                });
+            } else {
+                // 干扰星球
+                material = new THREE.MeshPhongMaterial({
+                    color: DISTURBANCE_PLANET_TEXTURE,
+                    emissive: 0x200000,
+                    specular: 0xffffff,
+                    shininess: 100
+                });
+            }
+            
+            const planet = new THREE.Mesh(geometry, material);
+            
+            // 随机位置（在屏幕边界外生成，向内部移动）
+            const edge = 8; // 边界距离
+            const side = Math.floor(Math.random() * 4); // 0: 上, 1: 右, 2: 下, 3: 左
+            let x, y;
+            
+            switch (side) {
+                case 0: // 上
+                    x = (Math.random() - 0.5) * 16;
+                    y = edge;
+                    break;
+                case 1: // 右
+                    x = edge;
+                    y = (Math.random() - 0.5) * 16;
+                    break;
+                case 2: // 下
+                    x = (Math.random() - 0.5) * 16;
+                    y = -edge;
+                    break;
+                case 3: // 左
+                    x = -edge;
+                    y = (Math.random() - 0.5) * 16;
+                    break;
+            }
+            
+            planet.position.set(x, y, 0);
+            
+            // 设置移动方向（朝向中心）
+            const direction = new THREE.Vector3(-x, -y, 0).normalize();
+            
+            // 存储星球信息
+            planet.userData = {
+                isCorrect: isCorrect,
+                direction: direction,
+                radius: radius,
+                isDisappearing: false,
+                disappearTime: 0
+            };
+            
+            scene.add(planet);
+            planets.push(planet);
+        }
+
+        // 更新游戏状态
+        function updateGame() {
+            const deltaTime = clock.getDelta();
+            
+            // 更新星星（轻微移动产生动态效果）
+            stars.forEach(starField => {
+                const positions = starField.geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i + 2] += deltaTime * 0.1;
+                    if (positions[i + 2] > 50) {
+                        positions[i + 2] = -50;
+                    }
+                }
+                starField.geometry.attributes.position.needsUpdate = true;
+            });
+            
+            // 更新飞船
+            updateShips(deltaTime);
+            
+            // 如果游戏正在运行，更新星球和碰撞检测
+            if (gameState.isRunning) {
+                // 生成星球
+                spawnPlanet();
+                
+                // 更新星球
+                updatePlanets(deltaTime);
+                
+                // 检测碰撞
+                detectCollisions();
+                
+                // 更新时间
+                updateTime();
+            }
+            
+            // 更新护盾状态
+            updateShields();
+        }
+
+        // 更新飞船
+        function updateShips(deltaTime) {
+            const currentTime = Date.now();
+            
+            // 更新飞船1（单人模式或双人模式的玩家1）
+            updateShip(0, deltaTime, currentTime);
+            
+            // 如果是双人模式，更新飞船2
+            if (!GAME_CONFIG.isSinglePlayer) {
+                updateShip(1, deltaTime, currentTime);
+            }
+        }
+
+        function updateShip(shipIndex, deltaTime, currentTime) {
+            const ship = ships[shipIndex];
+            const velocity = shipVelocities[shipIndex];
+            const isAccelerating = shipAccelerating[shipIndex];
+            
+            // 检查加速状态
+            if (isAccelerating) {
+                if (currentTime - (shipIndex === 0 ? gameState.lastAccelerationPlayer1 : gameState.lastAccelerationPlayer2) > GAME_CONFIG.accelerationDuration) {
+                    shipAccelerating[shipIndex] = false;
+                }
+            }
+            
+            // 根据模式和输入更新速度
+            if (GAME_CONFIG.isSinglePlayer && shipIndex === 0) {
+                // 单人模式：鼠标控制 - 提高灵敏度
+                const targetX = mousePosition.x * 0.02 * (isAccelerating ? GAME_CONFIG.shipAcceleration : GAME_CONFIG.shipSpeed);
+                const targetY = mousePosition.y * 0.02 * (isAccelerating ? GAME_CONFIG.shipAcceleration : GAME_CONFIG.shipSpeed);
+                velocity.x += (targetX - velocity.x) * deltaTime * 20;
+                velocity.y += (targetY - velocity.y) * deltaTime * 20;
+            } else {
+                // 双人模式：键盘控制
+                const speed = isAccelerating ? GAME_CONFIG.shipAcceleration : GAME_CONFIG.shipSpeed;
+                velocity.x = 0;
+                velocity.y = 0;
+                
+                if (shipIndex === 0) {
+                    // 玩家1：WASD
+                    if (keys['KeyW']) velocity.y += speed;
+                    if (keys['KeyS']) velocity.y -= speed;
+                    if (keys['KeyA']) velocity.x -= speed;
+                    if (keys['KeyD']) velocity.x += speed;
+                } else {
+                    // 玩家2：方向键
+                    if (keys['ArrowUp']) velocity.y += speed;
+                    if (keys['ArrowDown']) velocity.y -= speed;
+                    if (keys['ArrowLeft']) velocity.x -= speed;
+                    if (keys['ArrowRight']) velocity.x += speed;
+                }
+            }
+            
+            // 更新位置
+            ship.position.x += velocity.x;
+            ship.position.y += velocity.y;
+            
+            // 边界限制
+            const boundary = 6;
+            ship.position.x = Math.max(-boundary, Math.min(boundary, ship.position.x));
+            ship.position.y = Math.max(-boundary, Math.min(boundary, ship.position.y));
+            
+            // 更新尾焰效果
+            updateThruster(ship, isAccelerating);
+            
+            // 更新护盾位置
+            if (shipShields[shipIndex]) {
+                shipShields[shipIndex].position.copy(ship.position);
+            }
+        }
+
+        // 更新尾焰效果
+        function updateThruster(ship, isAccelerating) {
+            // 查找尾焰对象（它是飞船的子对象）
+            for (let i = 0; i < ship.children.length; i++) {
+                const child = ship.children[i];
+                if (child.isPoints) {
+                    const thruster = child;
+                    
+                    // 加速时尾焰变亮变长，并且改变颜色
+                    if (isAccelerating) {
+                        thruster.material.opacity = 1.0;
+                        thruster.material.size = 0.2;
+                        // 加速时尾焰颜色更亮
+                        if (ship === ships[0]) { // 玩家1
+                            thruster.material.color.set(0x00ffff);
+                        } else { // 玩家2
+                            thruster.material.color.set(0xffff00);
+                        }
+                    } else {
+                        thruster.material.opacity = 0.6;
+                        thruster.material.size = 0.1;
+                        // 正常状态颜色
+                        if (ship === ships[0]) { // 玩家1
+                            thruster.material.color.set(0x00aaff);
+                        } else { // 玩家2
+                            thruster.material.color.set(0xff5500);
+                        }
+                    }
+                    
+                    // 为尾焰添加随机动态效果
+                    const positions = thruster.geometry.attributes.position.array;
+                    for (let j = 0; j < positions.length; j += 3) {
+                        if (isAccelerating) {
+                            // 加速时尾焰更不稳定
+                            positions[j] += (Math.random() - 0.5) * 0.02;
+                            positions[j + 1] += (Math.random() - 0.5) * 0.02;
+                            positions[j + 2] -= 0.01 + Math.random() * 0.02;
+                        } else {
+                            // 正常时轻微波动
+                            positions[j] += (Math.random() - 0.5) * 0.01;
+                            positions[j + 1] += (Math.random() - 0.5) * 0.01;
+                        }
+                    }
+                    thruster.geometry.attributes.position.needsUpdate = true;
+                }
+            }
+        }
+
+        // 更新星球
+        function updatePlanets(deltaTime) {
+            for (let i = planets.length - 1; i >= 0; i--) {
+                const planet = planets[i];
+                
+                if (planet.userData.isDisappearing) {
+                    // 处理消失动画
+                    const elapsed = Date.now() - planet.userData.disappearTime;
+                    const progress = Math.min(elapsed / 500, 1); // 0.5秒内完成
+                    
+                    planet.scale.set(1 - progress, 1 - progress, 1 - progress);
+                    planet.material.opacity = 1 - progress;
+                    
+                    if (progress >= 1) {
+                        scene.remove(planet);
+                        planets.splice(i, 1);
+                    }
+                } else {
+                    // 移动星球
+                    const direction = planet.userData.direction;
+                    planet.position.x += direction.x * GAME_CONFIG.planetSpeed;
+                    planet.position.y += direction.y * GAME_CONFIG.planetSpeed;
+                    
+                    // 旋转星球
+                    planet.rotation.x += 0.01;
+                    planet.rotation.y += 0.01;
+                    
+                    // 移出边界检测
+                    if (Math.abs(planet.position.x) > 10 || Math.abs(planet.position.y) > 10) {
+                        scene.remove(planet);
+                        planets.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        // 创建碰撞粒子效果
+        function createCollisionEffect(position, isCorrect) {
+            // 创建粒子几何体
+            const particleCount = 30;
+            const geometry = new THREE.BufferGeometry();
+            
+            const positions = new Float32Array(particleCount * 3);
+            const velocities = [];
+            
+            // 初始化粒子位置和速度
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                // 从碰撞点随机散射
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * 0.3;
+                
+                positions[i] = position.x + Math.cos(angle) * distance;
+                positions[i + 1] = position.y + Math.sin(angle) * distance;
+                positions[i + 2] = position.z;
+                
+                // 存储粒子速度
+                velocities.push({
+                    x: Math.cos(angle) * (0.02 + Math.random() * 0.03),
+                    y: Math.sin(angle) * (0.02 + Math.random() * 0.03),
+                    z: (Math.random() - 0.5) * 0.02
+                });
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            // 根据是否正确答案使用不同颜色
+            const particleColor = isCorrect ? 0x00ff00 : 0xff6600;
+            
+            const material = new THREE.PointsMaterial({
+                color: particleColor,
+                size: 0.05,
+                transparent: true,
+                opacity: 1.0,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+            
+            // 粒子动画
+            const startTime = Date.now();
+            const animationDuration = 800; // 800毫秒
+            
+            function animateParticles() {
+                const elapsed = Date.now() - startTime;
+                const progress = elapsed / animationDuration;
+                
+                if (progress < 1) {
+                    // 更新粒子位置
+                    const positions = particles.geometry.attributes.position.array;
+                    
+                    for (let i = 0; i < positions.length; i += 3) {
+                        const idx = i / 3;
+                        positions[i] += velocities[idx].x;
+                        positions[i + 1] += velocities[idx].y;
+                        positions[i + 2] += velocities[idx].z;
+                    }
+                    
+                    particles.geometry.attributes.position.needsUpdate = true;
+                    
+                    // 淡出效果
+                    particles.material.opacity = 1 - progress;
+                    particles.material.size = 0.05 * (1 - progress * 0.5);
+                    
+                    requestAnimationFrame(animateParticles);
+                } else {
+                    // 移除粒子系统
+                    scene.remove(particles);
+                }
+            }
+            
+            animateParticles();
+        }
+
+        // 检测碰撞
+        function detectCollisions() {
+            const shipsToCheck = GAME_CONFIG.isSinglePlayer ? [ships[0]] : ships;
+            
+            // 遍历所有星球
+            for (let i = planets.length - 1; i >= 0; i--) {
+                const planet = planets[i];
+                
+                // 跳过已经在消失过程中的星球，确保每个星球只计算一次分数
+                if (planet.userData.isDisappearing) continue;
+                
+                // 检查与每艘飞船的碰撞
+                shipsToCheck.forEach((ship, shipIndex) => {
+                    // 计算距离
+                    const distance = Math.sqrt(
+                        Math.pow(ship.position.x - planet.position.x, 2) +
+                        Math.pow(ship.position.y - planet.position.y, 2)
+                    );
+                    
+                    // 检测是否在收集范围内
+                    if (distance < GAME_CONFIG.collectionDistance) {
+                        handlePlanetCollection(planet, shipIndex);
+                        // 一旦处理了这个星球，跳出循环，确保每个星球只被计算一次
+                        return;
+                    }
+                });
+            }
+        }
+
+        // 处理星球收集
+        function handlePlanetCollection(planet, shipIndex) {
+            // 再次检查，确保这个星球没有被处理过
+            if (planet.userData.isDisappearing) return;
+            
+            const isCorrect = planet.userData.isCorrect;
+            const currentTime = Date.now();
+            
+            // 立即标记星球为消失状态，防止重复计算
+            planet.userData.isDisappearing = true;
+            planet.userData.disappearTime = currentTime;
+            planet.material.transparent = true;
+            
+            // 添加碰撞粒子效果
+            createCollisionEffect(planet.position, isCorrect);
+            
+            // 更新分数
+            if (isCorrect) {
+                // 收集正确星球
+                if (shipIndex === 0) {
+                    gameState.scorePlayer1 += GAME_CONFIG.pointForCorrect;
+                } else {
+                    gameState.scorePlayer2 += GAME_CONFIG.pointForCorrect;
+                }
+                gameState.correctCount++;
+                
+                // 显示得分动画
+                showScorePopup(planet.position, `+${GAME_CONFIG.pointForCorrect}`, '#4CAF50');
+                
+                // 播放音效
+                if (soundEffects.collect) {
+                    soundEffects.collect();
+                }
+            } else {
+                // 碰撞错误星球
+                if (shipIndex === 0) {
+                    gameState.scorePlayer1 += GAME_CONFIG.pointForWrong;
+                    // 激活护盾
+                    gameState.hasShieldPlayer1 = true;
+                    gameState.shieldEndTimePlayer1 = currentTime + 1000; // 1秒
+                    shipShields[0].visible = true;
+                } else {
+                    gameState.scorePlayer2 += GAME_CONFIG.pointForWrong;
+                    // 激活护盾
+                    gameState.hasShieldPlayer2 = true;
+                    gameState.shieldEndTimePlayer2 = currentTime + 1000; // 1秒
+                    shipShields[1].visible = true;
+                }
+                gameState.wrongCount++;
+                
+                // 显示扣分动画
+                showScorePopup(planet.position, `${GAME_CONFIG.pointForWrong}`, '#f44336');
+                
+                // 播放音效
+                if (soundEffects.collide) {
+                    soundEffects.collide();
+                }
+            }
+            
+            // 更新UI
+            updateUI();
+        }
+
+        // 显示得分弹出动画
+        function showScorePopup(position, text, color) {
+            const popup = document.createElement('div');
+            popup.className = 'score-popup';
+            popup.textContent = text;
+            popup.style.color = color;
+            
+            // 转换3D坐标到屏幕坐标
+            const vector = new THREE.Vector3(position.x, position.y, position.z);
+            vector.project(camera);
+            
+            const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+            
+            popup.style.left = `${x}px`;
+            popup.style.top = `${y}px`;
+            
+            document.getElementById('game-ui').appendChild(popup);
+            
+            // 动画结束后移除
+            setTimeout(() => {
+                popup.remove();
+            }, 1000);
+        }
+
+        // 更新护盾状态
+        function updateShields() {
+            const currentTime = Date.now();
+            
+            // 更新玩家1护盾
+            if (gameState.hasShieldPlayer1) {
+                if (currentTime > gameState.shieldEndTimePlayer1) {
+                    gameState.hasShieldPlayer1 = false;
+                    shipShields[0].visible = false;
+                } else {
+                    // 闪烁效果
+                    const pulse = Math.sin(currentTime * 10) * 0.5 + 0.5;
+                    shipShields[0].material.opacity = 0.3 + pulse * 0.2;
+                }
+            }
+            
+            // 更新玩家2护盾
+            if (gameState.hasShieldPlayer2) {
+                if (currentTime > gameState.shieldEndTimePlayer2) {
+                    gameState.hasShieldPlayer2 = false;
+                    shipShields[1].visible = false;
+                } else {
+                    // 闪烁效果
+                    const pulse = Math.sin(currentTime * 10) * 0.5 + 0.5;
+                    shipShields[1].material.opacity = 0.3 + pulse * 0.2;
+                }
+            }
+        }
+
+        // 更新游戏时间
+        function updateTime() {
+            const currentTime = Date.now();
+            if (!gameState.startTime) {
+                gameState.startTime = currentTime;
+            }
+            
+            const elapsed = Math.floor((currentTime - gameState.startTime) / 1000);
+            gameState.remainingTime = GAME_CONFIG.gameTime - elapsed;
+            
+            if (gameState.remainingTime <= 0) {
+                endGame();
+            }
+            
+            // 更新UI
+            document.getElementById('timer').textContent = `剩余时间: ${gameState.remainingTime}s`;
+        }
+
+        // 更新UI
+        function updateUI() {
+            // 更新分数
+            document.getElementById('score-player1').textContent = `得分: ${gameState.scorePlayer1}`;
+            if (!GAME_CONFIG.isSinglePlayer) {
+                document.getElementById('score-player2').textContent = `得分: ${gameState.scorePlayer2}`;
+            }
+            
+            // 计算正确率
+            const totalAttempts = gameState.correctCount + gameState.wrongCount;
+            const accuracy = totalAttempts > 0 ? Math.round((gameState.correctCount / totalAttempts) * 100) : 100;
+            document.getElementById('accuracy').textContent = `正确率: ${accuracy}%`;
+        }
+
+        // 开始游戏
+        function startGame() {
+            // 重置游戏状态
+            gameState = {
+                isRunning: true,
+                remainingTime: GAME_CONFIG.gameTime,
+                scorePlayer1: 0,
+                scorePlayer2: 0,
+                correctCount: 0,
+                wrongCount: 0,
+                lastSpawnTime: 0,
+                lastAccelerationPlayer1: 0,
+                lastAccelerationPlayer2: 0,
+                hasShieldPlayer1: false,
+                hasShieldPlayer2: false,
+                shieldEndTimePlayer1: 0,
+                shieldEndTimePlayer2: 0,
+                spawnedPlanets: 0,
+                startTime: Date.now()
+            };
+            
+            // 清除所有星球
+            planets.forEach(planet => scene.remove(planet));
+            planets = [];
+            
+            // 设置飞船可见性
+            ships[0].visible = true;
+            ships[1].visible = !GAME_CONFIG.isSinglePlayer;
+            
+            // 隐藏开始按钮，显示其他UI
+            document.getElementById('start-button').style.display = 'none';
+            document.getElementById('timer').style.display = 'block';
+            document.getElementById('score-player1').style.display = 'block';
+            document.getElementById('score-player2').style.display = GAME_CONFIG.isSinglePlayer ? 'none' : 'block';
+            document.getElementById('accuracy').style.display = 'block';
+            document.getElementById('mode-toggle').style.display = 'block';
+            document.getElementById('sound-toggle').style.display = 'block';
+            document.getElementById('end-panel').style.display = 'none';
+            
+            // 更新UI
+            updateUI();
+        }
+
+        // 结束游戏
+        function endGame() {
+            gameState.isRunning = false;
+            
+            // 计算最终数据
+            const totalAttempts = gameState.correctCount + gameState.wrongCount;
+            const accuracy = totalAttempts > 0 ? Math.round((gameState.correctCount / totalAttempts) * 100) : 100;
+            
+            // 更新结束面板
+            if (GAME_CONFIG.isSinglePlayer) {
+                document.getElementById('final-score').textContent = `最终得分: ${gameState.scorePlayer1}`;
+            } else {
+                const winner = gameState.scorePlayer1 > gameState.scorePlayer2 ? '玩家1获胜！' : 
+                              gameState.scorePlayer2 > gameState.scorePlayer1 ? '玩家2获胜！' : '平局！';
+                document.getElementById('final-score').textContent = 
+                    `玩家1: ${gameState.scorePlayer1} | 玩家2: ${gameState.scorePlayer2} | ${winner}`;
+            }
+            document.getElementById('final-accuracy').textContent = `正确率: ${accuracy}%`;
+            
+            // 显示结束面板
+            document.getElementById('end-panel').style.display = 'block';
+        }
+
+        // 重新开始游戏
+        function restartGame() {
+            startGame();
+        }
+
+        // 切换游戏模式 - 【模式切换处】
+        function toggleMode() {
+            // 切换模式
+            GAME_CONFIG.isSinglePlayer = !GAME_CONFIG.isSinglePlayer;
+            
+            // 更新按钮文本
+            const modeButton = document.getElementById('mode-toggle');
+            modeButton.textContent = GAME_CONFIG.isSinglePlayer ? '切换到双人模式' : '切换到单人模式';
+            
+            // 更新飞船可见性
+            ships[1].visible = !GAME_CONFIG.isSinglePlayer;
+            document.getElementById('score-player2').style.display = GAME_CONFIG.isSinglePlayer ? 'none' : 'block';
+            
+            // 如果游戏正在运行，重置游戏
+            if (gameState.isRunning) {
+                startGame();
+            }
+        }
+
+        // 切换音效
+        function toggleSound() {
+            GAME_CONFIG.soundEnabled = !GAME_CONFIG.soundEnabled;
+            const soundButton = document.getElementById('sound-toggle');
+            soundButton.textContent = GAME_CONFIG.soundEnabled ? '静音' : '开启音效';
+        }
+
+        // 窗口调整事件
+        function onWindowResize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            
+            renderer.setSize(width, height);
+        }
+
+        // 鼠标移动事件
+        function onMouseMove(event) {
+            mousePosition.x = event.clientX - window.innerWidth / 2;
+            mousePosition.y = window.innerHeight / 2 - event.clientY;
+        }
+
+        // 鼠标点击事件（单人模式加速）
+        function onMouseDown() {
+            if (GAME_CONFIG.isSinglePlayer && gameState.isRunning) {
+                const currentTime = Date.now();
+                if (currentTime - gameState.lastAccelerationPlayer1 > GAME_CONFIG.accelerationCooldown) {
+                    shipAccelerating[0] = true;
+                    gameState.lastAccelerationPlayer1 = currentTime;
+                    
+                    // 播放音效
+                    if (soundEffects.accelerate) {
+                        soundEffects.accelerate();
+                    }
+                }
+            }
+        }
+
+        // 键盘按下事件
+        function onKeyDown(event) {
+            keys[event.code] = true;
+            
+            // 双人模式加速
+            if (!GAME_CONFIG.isSinglePlayer && gameState.isRunning) {
+                const currentTime = Date.now();
+                
+                // 玩家1空格键加速
+                if (event.code === 'Space' && currentTime - gameState.lastAccelerationPlayer1 > GAME_CONFIG.accelerationCooldown) {
+                    shipAccelerating[0] = true;
+                    gameState.lastAccelerationPlayer1 = currentTime;
+                    
+                    // 播放音效
+                    if (soundEffects.accelerate) {
+                        soundEffects.accelerate();
+                    }
+                }
+                
+                // 玩家2Enter键加速
+                if (event.code === 'Enter' && currentTime - gameState.lastAccelerationPlayer2 > GAME_CONFIG.accelerationCooldown) {
+                    shipAccelerating[1] = true;
+                    gameState.lastAccelerationPlayer2 = currentTime;
+                    
+                    // 播放音效
+                    if (soundEffects.accelerate) {
+                        soundEffects.accelerate();
+                    }
+                }
+            }
+        }
+
+        // 键盘释放事件
+        function onKeyUp(event) {
+            keys[event.code] = false;
+        }
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateGame();
+            
+            renderer.render(scene, camera);
+        }
+
+        // 初始化游戏
+        window.addEventListener('load', init);
+    </script>
+
+    <!-- 使用说明 -->
+    <!-- 
+    如何替换知识点贴图：
+    1. 找到代码中的 "KNOWLEDGE_PLANET_TEXTURES" 数组（标记为【知识点替换处】）
+    2. 将数组中的颜色值替换为实际的知识点图片URL，例如：
+       const KNOWLEDGE_PLANET_TEXTURES = [
+           'math_formula1.png', 'math_formula2.png', 'math_formula3.png'
+       ];
+    3. 确保图片尺寸适合作为星球贴图（建议256x256或512x512）
+
+    如何调整游戏参数：
+    1. 找到代码中的 "GAME_CONFIG" 对象（标记为【参数调整处】）
+    2. 调整以下参数：
+       - gameTime: 游戏时间（秒）
+       - planetSpeed: 星球移动速度
+       - planetSpawnRate: 星球生成频率（秒/个）
+       - accelerationDuration: 加速持续时间（毫秒）
+       - accelerationCooldown: 加速冷却时间（毫秒）
+
+    如何切换单人/双人模式：
+    1. 游戏界面右上角有「切换到双人模式/单人模式」按钮
+    2. 点击按钮即可切换，切换后会自动重置游戏
+    3. 双人模式操作：
+       - 玩家1（蓝色）：WASD控制方向，空格键加速
+       - 玩家2（红色）：方向键控制方向，Enter键加速
+    4. 单人模式操作：
+       - 鼠标移动控制飞船方向
+       - 鼠标左键点击加速
+    -->
+</body>
+</html>

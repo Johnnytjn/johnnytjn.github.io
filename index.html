@@ -170,6 +170,105 @@
                 transform: translateY(-50px);
             }
         }
+        /* 移动端触摸控制按钮 */
+        #mobile-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            pointer-events: auto;
+        }
+        .control-button {
+            width: 80px;
+            height: 80px;
+            margin: 0 10px;
+            border-radius: 50%;
+            border: none;
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: all 0.2s ease;
+        }
+        #accelerate-btn {
+            background: linear-gradient(45deg, #FF5722, #FF9800);
+            box-shadow: 0 4px 15px rgba(255, 87, 34, 0.4);
+        }
+        #accelerate-btn:active {
+            transform: scale(0.9);
+            box-shadow: 0 2px 8px rgba(255, 87, 34, 0.6);
+        }
+        /* 移动端响应式样式 */
+        @media (max-width: 768px) {
+            .ui-element {
+                font-size: 18px;
+                padding: 10px 20px;
+            }
+            #start-button {
+                font-size: 28px;
+                padding: 15px 40px;
+            }
+            #timer, #accuracy {
+                font-size: 16px;
+            }
+            #score-player1, #score-player2 {
+                font-size: 14px;
+            }
+            #mode-toggle, #sound-toggle {
+                font-size: 14px;
+                padding: 8px 15px;
+            }
+            .score-popup {
+                font-size: 18px;
+            }
+            #end-panel h2 {
+                font-size: 32px;
+            }
+            #end-panel p {
+                font-size: 24px;
+            }
+            #restart-button {
+                font-size: 20px;
+                padding: 12px 30px;
+            }
+            .control-button {
+                width: 60px;
+                height: 60px;
+                font-size: 14px;
+                margin: 0 8px;
+            }
+        }
+        @media (max-width: 480px) {
+            .ui-element {
+                font-size: 16px;
+                padding: 8px 15px;
+            }
+            #start-button {
+                font-size: 24px;
+                padding: 12px 30px;
+            }
+            #timer, #accuracy {
+                font-size: 14px;
+            }
+            #score-player1, #score-player2 {
+                font-size: 12px;
+            }
+            #mode-toggle, #sound-toggle {
+                font-size: 12px;
+                padding: 6px 12px;
+            }
+            .control-button {
+                width: 50px;
+                height: 50px;
+                font-size: 12px;
+                margin: 0 5px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -189,6 +288,9 @@
         </div>
         <button id="mode-toggle" class="ui-element">切换到双人模式</button>
         <button id="sound-toggle" class="ui-element">静音</button>
+        <div id="mobile-controls">
+            <button id="accelerate-btn" class="control-button">加速</button>
+        </div>
     </div>
 
     <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
@@ -295,6 +397,9 @@
             document.getElementById('restart-button').addEventListener('click', restartGame);
             document.getElementById('mode-toggle').addEventListener('click', toggleMode);
             document.getElementById('sound-toggle').addEventListener('click', toggleSound);
+
+            // 移动端触摸控制
+            setupMobileControls();
 
             // 开始动画循环
             animate();
@@ -1164,6 +1269,13 @@
             document.getElementById('sound-toggle').style.display = 'block';
             document.getElementById('end-panel').style.display = 'none';
             
+            // 移动端显示控制按钮
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                            window.innerWidth <= 768;
+            if (isMobile && GAME_CONFIG.isSinglePlayer) {
+                document.getElementById('mobile-controls').style.display = 'block';
+            }
+            
             // 更新UI
             updateUI();
         }
@@ -1189,10 +1301,15 @@
             
             // 显示结束面板
             document.getElementById('end-panel').style.display = 'block';
+            
+            // 隐藏移动端控制按钮
+            document.getElementById('mobile-controls').style.display = 'none';
         }
 
         // 重新开始游戏
         function restartGame() {
+            // 隐藏移动端控制按钮
+            document.getElementById('mobile-controls').style.display = 'none';
             startGame();
         }
 
@@ -1290,6 +1407,81 @@
         // 键盘释放事件
         function onKeyUp(event) {
             keys[event.code] = false;
+        }
+
+        // 移动端触摸控制设置
+        function setupMobileControls() {
+            // 检测是否为移动端
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                            window.innerWidth <= 768;
+            
+            if (isMobile) {
+                // 显示移动端控制按钮
+                document.getElementById('mobile-controls').style.display = 'block';
+                
+                // 添加触摸事件监听器
+                const accelerateBtn = document.getElementById('accelerate-btn');
+                
+                // 触摸开始事件
+                accelerateBtn.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+                    if (gameState.isRunning) {
+                        const currentTime = Date.now();
+                        if (currentTime - gameState.lastAccelerationPlayer1 > GAME_CONFIG.accelerationCooldown) {
+                            shipAccelerating[0] = true;
+                            gameState.lastAccelerationPlayer1 = currentTime;
+                            
+                            // 播放音效
+                            if (soundEffects.accelerate) {
+                                soundEffects.accelerate();
+                            }
+                        }
+                    }
+                });
+                
+                // 触摸结束事件
+                accelerateBtn.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    shipAccelerating[0] = false;
+                });
+                
+                // 触摸取消事件
+                accelerateBtn.addEventListener('touchcancel', function(e) {
+                    e.preventDefault();
+                    shipAccelerating[0] = false;
+                });
+                
+                // 添加触摸移动控制（代替鼠标移动）
+                let touchStartX = 0;
+                let touchStartY = 0;
+                
+                document.addEventListener('touchstart', function(e) {
+                    if (e.target === document.getElementById('canvas')) {
+                        e.preventDefault();
+                        const touch = e.touches[0];
+                        touchStartX = touch.clientX;
+                        touchStartY = touch.clientY;
+                    }
+                });
+                
+                document.addEventListener('touchmove', function(e) {
+                    if (e.target === document.getElementById('canvas')) {
+                        e.preventDefault();
+                        const touch = e.touches[0];
+                        mousePosition.x = (touch.clientX - window.innerWidth / 2) * 0.5;
+                        mousePosition.y = (window.innerHeight / 2 - touch.clientY) * 0.5;
+                    }
+                });
+                
+                // 防止双击缩放
+                document.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                });
+                
+                // 设置视口
+                document.querySelector('meta[name="viewport"]').setAttribute('content', 
+                    'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+            }
         }
 
         // 动画循环

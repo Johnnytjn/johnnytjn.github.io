@@ -38,7 +38,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none;
+            pointer-events: auto;
         }
         .ui-element {
             position: absolute;
@@ -397,6 +397,24 @@
             document.getElementById('restart-button').addEventListener('click', restartGame);
             document.getElementById('mode-toggle').addEventListener('click', toggleMode);
             document.getElementById('sound-toggle').addEventListener('click', toggleSound);
+            
+            // 为移动设备添加触摸事件支持
+            document.getElementById('start-button').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                startGame();
+            });
+            document.getElementById('restart-button').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                restartGame();
+            });
+            document.getElementById('mode-toggle').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                toggleMode();
+            });
+            document.getElementById('sound-toggle').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                toggleSound();
+            });
 
             // 移动端触摸控制
             setupMobileControls();

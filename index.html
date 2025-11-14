@@ -1472,23 +1472,73 @@
                 // 添加触摸移动控制（代替鼠标移动）
                 let touchStartX = 0;
                 let touchStartY = 0;
+                let isTouching = false;
                 
+                // 绑定到整个文档的触摸事件，而不是特定的canvas元素
                 document.addEventListener('touchstart', function(e) {
-                    if (e.target === document.getElementById('canvas')) {
-                        e.preventDefault();
-                        const touch = e.touches[0];
-                        touchStartX = touch.clientX;
-                        touchStartY = touch.clientY;
+                    // 避免与UI按钮冲突
+                    if (e.target.classList.contains('control-button') || 
+                        e.target.id === 'start-button' || 
+                        e.target.id === 'restart-button' || 
+                        e.target.id === 'mode-toggle' || 
+                        e.target.id === 'sound-toggle') {
+                        return;
                     }
+                    
+                    e.preventDefault();
+                    isTouching = true;
+                    const touch = e.touches[0];
+                    touchStartX = touch.clientX;
+                    touchStartY = touch.clientY;
+                    // 立即更新鼠标位置
+                    mousePosition.x = touch.clientX - window.innerWidth / 2;
+                    mousePosition.y = window.innerHeight / 2 - touch.clientY;
                 });
                 
                 document.addEventListener('touchmove', function(e) {
-                    if (e.target === document.getElementById('canvas')) {
-                        e.preventDefault();
+                    if (!isTouching) return;
+                    
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    // 更灵敏的触摸控制 - 直接映射触摸位置到飞船移动
+                    mousePosition.x = touch.clientX - window.innerWidth / 2;
+                    mousePosition.y = window.innerHeight / 2 - touch.clientY;
+                });
+                
+                document.addEventListener('touchend', function(e) {
+                    if (!isTouching) return;
+                    
+                    e.preventDefault();
+                    isTouching = false;
+                    // 重置鼠标位置到中心
+                    mousePosition.x = 0;
+                    mousePosition.y = 0;
+                });
+                
+                // 添加触摸指示器（可选）
+                const touchIndicator = document.createElement('div');
+                touchIndicator.style.position = 'absolute';
+                touchIndicator.style.width = '20px';
+                touchIndicator.style.height = '20px';
+                touchIndicator.style.borderRadius = '50%';
+                touchIndicator.style.backgroundColor = 'rgba(255, 255, 255, 0.5)';
+                touchIndicator.style.pointerEvents = 'none';
+                touchIndicator.style.display = 'none';
+                touchIndicator.style.zIndex = '1000';
+                document.body.appendChild(touchIndicator);
+                
+                // 更新触摸指示器位置
+                document.addEventListener('touchmove', function(e) {
+                    if (isTouching) {
                         const touch = e.touches[0];
-                        mousePosition.x = (touch.clientX - window.innerWidth / 2) * 0.5;
-                        mousePosition.y = (window.innerHeight / 2 - touch.clientY) * 0.5;
+                        touchIndicator.style.display = 'block';
+                        touchIndicator.style.left = (touch.clientX - 10) + 'px';
+                        touchIndicator.style.top = (touch.clientY - 10) + 'px';
                     }
+                });
+                
+                document.addEventListener('touchend', function(e) {
+                    touchIndicator.style.display = 'none';
                 });
                 
                 // 防止双击缩放

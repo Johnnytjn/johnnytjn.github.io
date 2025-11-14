@@ -593,12 +593,12 @@
             const shield1 = new THREE.Mesh(shieldGeometry, shieldMaterial);
             shield1.visible = false;
             scene.add(shield1);
-            shipShields.push(shield1);
+            shipShields[0] = shield1;
 
             const shield2 = new THREE.Mesh(shieldGeometry, shieldMaterial);
             shield2.visible = false;
             scene.add(shield2);
-            shipShields.push(shield2);
+            shipShields[1] = shield2;
 
             // 添加光源
             const ambientLight = new THREE.AmbientLight(0x404040);
